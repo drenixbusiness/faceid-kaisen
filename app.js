@@ -1,5 +1,4 @@
-require('dotenv').config({ path: require('path').join(__dirname, '.env'), debug: true });
-console.log('[STARTUP] __dirname:', __dirname, '| CHAT_ID:', process.env.TELEGRAM_CHAT_ID || 'EMPTY');
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 const express = require('express');
 const axios = require('axios');
 const Database = require('better-sqlite3');
