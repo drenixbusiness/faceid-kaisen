@@ -70,6 +70,7 @@ const EMPLOYEE_SHIFT_MAP = {
     '12':   { name: 'Lazizbek Leo',  shiftKey: '5-2' },
     '24':   { name: 'Sardor',        shiftKey: '5-2' },
     '28':   { name: 'Azimjon',       shiftKey: '5-2' },
+    '41':   { name: 'Umrbek',       shiftKey: '5-2' },
 };
 
 const EMPLOYEE_SECRET_KEYS = {
