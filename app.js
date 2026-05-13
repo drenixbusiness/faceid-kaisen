@@ -630,8 +630,8 @@ async function handleEvent(data) {
         if (lateFlag) header = '⏰ <b>Late Check In</b>';
         if (didntComeFlag) header = '🚫 <b>Very Late</b>';
         let msg = `${header}\n🏷 Shift: ${configuredShift.label}\n${baseMessage}`;
-        if (didntComeFlag) msg += `\n🚫 Marked as: <b>Did Not Come</b>\n⏱ Late by: <b>${lateMin} min</b>`;
-        else if (lateFlag) msg += `\n🚨 Late by: <b>${lateMin} min</b>`;
+        if (didntComeFlag) msg += `\n🚫 Marked as: <b>Did Not Come</b>\n\n⏱ Late by: <b>${lateMin} min</b>`;
+        else if (lateFlag) msg += `\n\n🚨 Late by: <b>${lateMin} min</b>`;
         else msg += `\n🟢 On time (within ${ON_TIME_GRACE_MIN} min grace)`;
 
         await sendTelegram(msg);
