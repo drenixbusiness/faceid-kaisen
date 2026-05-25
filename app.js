@@ -629,28 +629,10 @@ async function handleEvent(data, sourceIp) {
         `🕒 Time: ${timeStr}`;
 
     if (checkType === 'breakOut') {
-        const msg = `☕ <b>Break Out</b>\n\n${baseMessage}`;
-        await sendTelegram(msg);
-        await sendPersonalDm(employeeId, msg);
         return;
     }
 
     if (checkType === 'breakIn') {
-        const lastBreakOut = db.prepare(`
-      SELECT timestamp FROM attendance
-      WHERE employee_id = ? AND status = 'breakOut' AND timestamp < ?
-      ORDER BY timestamp DESC
-      LIMIT 1
-    `).get(employeeId, eventTime.toISOString());
-
-        let breakDurationText = '';
-        if (lastBreakOut) {
-            breakDurationText = `\n⏱ Break duration: <b>${formatDuration(new Date(lastBreakOut.timestamp), eventTime)}</b>`;
-        }
-
-        const msg = `🔙 <b>Break In</b>\n\n${baseMessage}${breakDurationText}`;
-        await sendTelegram(msg);
-        await sendPersonalDm(employeeId, msg);
         return;
     }
     if (!configuredShift) return;
@@ -769,7 +751,6 @@ async function runBreakOvertimeCheck() {
           VALUES (?, ?, ?)
         `).run(row.employee_id, row.timestamp, now.toISOString());
 
-        await sendTelegram(msg);
         await sendPersonalDm(row.employee_id, msg);
     }
 }
