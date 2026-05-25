@@ -64,22 +64,22 @@ const SHIFT_RULES = {
 
 // ====== KAISEN TEAM EMPLOYEES ======
 const EMPLOYEE_SHIFT_MAP = {
-    '003':  { name: 'Hasanboy',      shiftKey: '5-2' },
-    '004':  { name: 'Akbar Ramadan', shiftKey: '5-2' },
-    '0006': { name: 'Farrux',        shiftKey: '5-2' },
-    '12':   { name: 'Lazizbek Leo',  shiftKey: '5-2' },
-    '24':   { name: 'Sardor',        shiftKey: '5-2' },
-    '28':   { name: 'Azimjon',       shiftKey: '5-2' },
-    '41':   { name: 'Umrbek',       shiftKey: '5-2' },
+    '003': { name: 'Hasanboy', shiftKey: '5-2' },
+    '004': { name: 'Akbar Ramadan', shiftKey: '5-2' },
+    '0006': { name: 'Farrux', shiftKey: '5-2' },
+    '12': { name: 'Lazizbek Leo', shiftKey: '5-2' },
+    '24': { name: 'Sardor', shiftKey: '5-2' },
+    '28': { name: 'Azimjon', shiftKey: '5-2' },
+    '41': { name: 'Umrbek', shiftKey: '5-2' },
 };
 
 const EMPLOYEE_SECRET_KEYS = {
-    '003':  'gh#ma9mTsw',
-    '004':  'agA8kb&vyk',
+    '003': 'gh#ma9mTsw',
+    '004': 'agA8kb&vyk',
     '0006': 'b9afrpiR&y',
-    '12':   '!rlz2ajKkv',
-    '24':   'ms&yaMr2fr',
-    '28':   'r2ijdwaJz$'
+    '12': '!rlz2ajKkv',
+    '24': 'ms&yaMr2fr',
+    '28': 'r2ijdwaJz$'
 };
 // ===================================
 
@@ -282,6 +282,16 @@ function resolveShiftDateForEvent(eventTime, shift) {
 }
 
 function classifyPunch(eventTime, statusRaw, shift, shiftDate) {
+    if (statusRaw === 'insideExit') {
+        const checkOutFrom = makeShiftDateTime(shiftDate, shift.validCheckOutFrom, shift.checkOutDayOffset);
+        const checkOutTo = makeShiftDateTime(shiftDate, shift.validCheckOutTo, shift.checkOutDayOffset);
+
+        if (eventTime >= checkOutFrom && eventTime <= checkOutTo) {
+            return 'checkOut';
+        }
+
+        return 'breakOut';
+    }
     if (statusRaw === 'checkIn') return 'checkIn';
     if (statusRaw === 'checkOut') return 'checkOut';
     if (statusRaw === 'breakIn') return 'breakIn';
@@ -308,6 +318,30 @@ const statusAliases = {
     breakin: 'breakIn',
     breakout: 'breakOut'
 };
+
+const OUTSIDE_DEVICE_IPS = (process.env.OUTSIDE_DEVICE_IPS || '')
+    .split(',')
+    .map(ip => ip.trim())
+    .filter(Boolean);
+
+const INSIDE_DEVICE_IPS = (process.env.INSIDE_DEVICE_IPS || '')
+    .split(',')
+    .map(ip => ip.trim())
+    .filter(Boolean);
+
+function remapStatusByDevice(deviceIp, statusRaw) {
+    if (!deviceIp || !statusRaw) return statusRaw;
+
+    if (OUTSIDE_DEVICE_IPS.includes(deviceIp)) {
+        return 'checkIn';
+    }
+
+    if (INSIDE_DEVICE_IPS.includes(deviceIp)) {
+        return 'insideExit';
+    }
+
+    return statusRaw;
+}
 
 const recentEventCache = new Map();
 let lastWebhookSnapshot = null;
@@ -528,7 +562,7 @@ function isDuplicateEvent(evt, employeeId, normalizedStatus) {
     return lastSeen && now - lastSeen < 15000;
 }
 
-async function handleEvent(data) {
+async function handleEvent(data, sourceIp) {
     let evt = extractAccessEvent(data);
     if (!evt) return;
     if (typeof evt === 'string') {
@@ -557,7 +591,8 @@ async function handleEvent(data) {
     const statusRawOriginal =
         evt.attendanceStatus || evt.status || evt.checkType ||
         evt.AccessControllerEvent?.attendanceStatus || evt.AccessControllerEvent?.status || evt.AccessControllerEvent?.checkType;
-    const statusRaw = statusAliases[String(statusRawOriginal || '').trim().toLowerCase()] || statusRawOriginal;
+    let statusRaw = statusAliases[String(statusRawOriginal || '').trim().toLowerCase()] || statusRawOriginal;
+    statusRaw = remapStatusByDevice(sourceIp, statusRaw);
     const status = statusMap[statusRaw] || {
         label: statusRawOriginal || evt.minorEventType || evt.subEventType || evt.eventType || evt.label || 'Access Event',
         emoji: '📌'
@@ -593,7 +628,31 @@ async function handleEvent(data) {
         `🆔 ID: ${employeeId || 'Unknown'}\n` +
         `🕒 Time: ${timeStr}`;
 
-    if (checkType === 'breakIn' || checkType === 'breakOut') return;
+    if (checkType === 'breakOut') {
+        const msg = `☕ <b>Break Out</b>\n\n${baseMessage}`;
+        await sendTelegram(msg);
+        await sendPersonalDm(employeeId, msg);
+        return;
+    }
+
+    if (checkType === 'breakIn') {
+        const lastBreakOut = db.prepare(`
+      SELECT timestamp FROM attendance
+      WHERE employee_id = ? AND status = 'breakOut' AND timestamp < ?
+      ORDER BY timestamp DESC
+      LIMIT 1
+    `).get(employeeId, eventTime.toISOString());
+
+        let breakDurationText = '';
+        if (lastBreakOut) {
+            breakDurationText = `\n⏱ Break duration: <b>${formatDuration(new Date(lastBreakOut.timestamp), eventTime)}</b>`;
+        }
+
+        const msg = `🔙 <b>Break In</b>\n\n${baseMessage}${breakDurationText}`;
+        await sendTelegram(msg);
+        await sendPersonalDm(employeeId, msg);
+        return;
+    }
     if (!configuredShift) return;
 
     const existingDay = db.prepare(`
@@ -673,6 +732,48 @@ async function handleEvent(data) {
     }
 }
 
+async function runBreakOvertimeCheck() {
+    const now = new Date();
+    const cutoff = new Date(now.getTime() - BREAK_LIMIT_MIN * 60000).toISOString();
+    const windowStart = new Date(now.getTime() - 12 * 60 * 60000).toISOString();
+
+    const overdueBreaks = db.prepare(`
+      SELECT a.employee_id, a.employee_name, a.timestamp
+      FROM attendance a
+      WHERE a.status = 'breakOut'
+        AND a.timestamp <= ?
+        AND a.timestamp >= ?
+        AND NOT EXISTS (
+          SELECT 1 FROM attendance b
+          WHERE b.employee_id = a.employee_id
+            AND b.status = 'breakIn'
+            AND b.timestamp > a.timestamp
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM break_overtime_alerts x
+          WHERE x.employee_id = a.employee_id
+            AND x.break_out_at = a.timestamp
+        )
+    `).all(cutoff, windowStart);
+
+    for (const row of overdueBreaks) {
+        const msg =
+            `⚠️ <b>Break Warning</b>\n\n` +
+            `👤 Name: ${row.employee_name || 'Unknown'}\n` +
+            `🆔 ID: ${row.employee_id}\n` +
+            `⏱ Break time: <b>${formatDuration(new Date(row.timestamp), now)}</b>\n` +
+            `🚨 Please come back. You have been on break for more than ${BREAK_LIMIT_MIN} minutes.`;
+
+        db.prepare(`
+          INSERT OR IGNORE INTO break_overtime_alerts (employee_id, break_out_at, alerted_at)
+          VALUES (?, ?, ?)
+        `).run(row.employee_id, row.timestamp, now.toISOString());
+
+        await sendTelegram(msg);
+        await sendPersonalDm(row.employee_id, msg);
+    }
+}
+
 async function runNoShowCheck() {
     const now = new Date();
     const today = formatDateInZone(now);
@@ -739,7 +840,14 @@ app.post('/hikvision/event', upload.any(), async (req, res) => {
             topLevelKeys: Object.keys(data || {}),
             extractedAccessEvent: extractAccessEvent(data)
         };
-        await handleEvent(data);
+        const sourceIp =
+            req.headers['x-source-ip'] ||
+            req.headers['x-real-ip'] ||
+            req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+            req.socket.remoteAddress?.replace('::ffff:', '') ||
+            '';
+
+        await handleEvent(data, sourceIp);
         res.status(200).send('OK');
     } catch (err) {
         console.error('Handler error:', err.message);
@@ -766,3 +874,7 @@ app.listen(PORT, '0.0.0.0', () => {
 setInterval(() => {
     runNoShowCheck().catch((err) => console.error('No-show check error:', err.message));
 }, NO_SHOW_CHECK_INTERVAL_MS);
+
+setInterval(() => {
+    runBreakOvertimeCheck().catch((err) => console.error('Break overtime check error:', err.message));
+}, 60000);
