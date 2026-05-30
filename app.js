@@ -19,7 +19,7 @@ const DIAG_EVENT_LINE = true;
 const BUSINESS_TIMEZONE = 'Asia/Tashkent';
 const BUSINESS_OFFSET = '+05:00';
 const NO_SHOW_CHECK_INTERVAL_MS = 60000;
-const BREAK_LIMIT_MIN = 60;
+const BREAK_LIMIT_MIN = 30;
 const ON_TIME_GRACE_MIN = 10;
 const DIDNT_COME_AFTER_MIN = 120;
 const VERY_LATE_AFTER_MIN = DIDNT_COME_AFTER_MIN + ON_TIME_GRACE_MIN;
@@ -329,16 +329,25 @@ const INSIDE_DEVICE_IPS = (process.env.INSIDE_DEVICE_IPS || '')
     .map(ip => ip.trim())
     .filter(Boolean);
 
-function remapStatusByDevice(deviceIp, statusRaw) {
-    if (!deviceIp || !statusRaw) return statusRaw;
-
-    if (OUTSIDE_DEVICE_IPS.includes(deviceIp)) {
-        return 'checkIn';
+function normalizeVerifyMode(evt) {
+    if (evt.FaceRect || evt.AccessControllerEvent?.FaceRect) {
+        return 'face';
     }
 
-    if (INSIDE_DEVICE_IPS.includes(deviceIp)) {
-        return 'insideExit';
-    }
+    return 'fingerprint';
+}
+
+function remapStatusByDeviceAndVerifyMode(deviceIp, evt, statusRaw) {
+    const verifyMode = normalizeVerifyMode(evt);
+
+    const isOutside = OUTSIDE_DEVICE_IPS.includes(deviceIp);
+    const isInside = INSIDE_DEVICE_IPS.includes(deviceIp);
+
+    if (isOutside && verifyMode === 'fingerprint') return 'checkIn';
+    if (isInside && verifyMode === 'fingerprint') return 'checkOut';
+
+    if (isInside && verifyMode === 'face') return 'breakOut';
+    if (isOutside && verifyMode === 'face') return 'breakIn';
 
     return statusRaw;
 }
@@ -592,7 +601,7 @@ async function handleEvent(data, sourceIp) {
         evt.attendanceStatus || evt.status || evt.checkType ||
         evt.AccessControllerEvent?.attendanceStatus || evt.AccessControllerEvent?.status || evt.AccessControllerEvent?.checkType;
     let statusRaw = statusAliases[String(statusRawOriginal || '').trim().toLowerCase()] || statusRawOriginal;
-    statusRaw = remapStatusByDevice(sourceIp, statusRaw);
+    statusRaw = remapStatusByDeviceAndVerifyMode(sourceIp, evt, statusRaw);
     const status = statusMap[statusRaw] || {
         label: statusRawOriginal || evt.minorEventType || evt.subEventType || evt.eventType || evt.label || 'Access Event',
         emoji: '📌'
