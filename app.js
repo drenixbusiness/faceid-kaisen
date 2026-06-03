@@ -330,6 +330,31 @@ const INSIDE_DEVICE_IPS = (process.env.INSIDE_DEVICE_IPS || '')
     .filter(Boolean);
 
 function normalizeVerifyMode(evt) {
+    // FaceID events from Hikvision include FaceRect
+    if (evt.FaceRect || evt.AccessControllerEvent?.FaceRect) {
+        return 'face';
+    }
+
+    // Default to fingerprint if no FaceRect
+    return 'fingerprint';
+}
+
+function remapStatusByDeviceAndVerifyMode(deviceIp, evt, statusRaw) {
+    const verifyMode = normalizeVerifyMode(evt);
+
+    const isOutside = OUTSIDE_DEVICE_IPS.includes(deviceIp);
+    const isInside = INSIDE_DEVICE_IPS.includes(deviceIp);
+
+    if (isOutside && verifyMode === 'fingerprint') return 'checkIn';
+    if (isInside && verifyMode === 'fingerprint') return 'checkOut';
+
+    if (isInside && verifyMode === 'face') return 'breakOut';
+    if (isOutside && verifyMode === 'face') return 'breakIn';
+
+    return statusRaw;
+}
+
+function normalizeVerifyMode(evt) {
     if (evt.FaceRect || evt.AccessControllerEvent?.FaceRect) {
         return 'face';
     }
@@ -601,6 +626,11 @@ async function handleEvent(data, sourceIp) {
         evt.attendanceStatus || evt.status || evt.checkType ||
         evt.AccessControllerEvent?.attendanceStatus || evt.AccessControllerEvent?.status || evt.AccessControllerEvent?.checkType;
     let statusRaw = statusAliases[String(statusRawOriginal || '').trim().toLowerCase()] || statusRawOriginal;
+
+    // REMAP based on device & verify method
+    statusRaw = remapStatusByDeviceAndVerifyMode(sourceIp, evt, statusRaw);
+
+    console.log('DEVICE MAP DEBUG:', 'sourceIp=', sourceIp, 'verifyMode=', normalizeVerifyMode(evt), 'raw=', statusRawOriginal, 'mapped=', statusRaw);
     statusRaw = remapStatusByDeviceAndVerifyMode(sourceIp, evt, statusRaw);
     const status = statusMap[statusRaw] || {
         label: statusRawOriginal || evt.minorEventType || evt.subEventType || evt.eventType || evt.label || 'Access Event',
