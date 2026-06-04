@@ -71,6 +71,7 @@ const EMPLOYEE_SHIFT_MAP = {
     '24': { name: 'Sardor', shiftKey: '5-2' },
     '28': { name: 'Azimjon', shiftKey: '5-2' },
     '41': { name: 'Umrbek', shiftKey: '5-2' },
+    '19': { name: 'Jessica', shiftKey: '5-2' },
 };
 
 const EMPLOYEE_SECRET_KEYS = {
@@ -79,9 +80,10 @@ const EMPLOYEE_SECRET_KEYS = {
     '0006': 'b9afrpiR&y',
     '12': '!rlz2ajKkv',
     '24': 'ms&yaMr2fr',
-    '28': 'r2ijdwaJz$'
+    '28': 'r2ijdwaJz$',
+    '41': 'n3#5s8XhLq',
+    '19': 'k4!8v9Yp7z'
 };
-// ===================================
 
 const app = express();
 const upload = multer();
