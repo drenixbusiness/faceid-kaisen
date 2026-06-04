@@ -69,7 +69,6 @@ const EMPLOYEE_SHIFT_MAP = {
     '0006': { name: 'Farrux', shiftKey: '5-2' },
     '12': { name: 'Lazizbek Leo', shiftKey: '5-2' },
     '24': { name: 'Sardor', shiftKey: '5-2' },
-    '28': { name: 'Azimjon', shiftKey: '5-2' },
     '41': { name: 'Umrbek', shiftKey: '5-2' },
     '19': { name: 'Jessica', shiftKey: '5-2' },
 };
