@@ -744,7 +744,7 @@ async function runBreakOvertimeCheck() {
         AND NOT EXISTS (
           SELECT 1 FROM attendance b
           WHERE b.employee_id = a.employee_id
-            AND b.status = 'breakIn'
+            AND b.status IN ('breakIn', 'checkIn', 'checkOut')
             AND b.timestamp > a.timestamp
         )
         AND NOT EXISTS (
