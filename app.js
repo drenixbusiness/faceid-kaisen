@@ -64,7 +64,6 @@ const SHIFT_RULES = {
 
 // ====== KAISEN TEAM EMPLOYEES ======
 const EMPLOYEE_SHIFT_MAP = {
-    '001': { name: 'Suxrob', shiftKey: '6-3' },
     '003': { name: 'Hasanboy', shiftKey: '5-2' },
     '004': { name: 'Akbar Ramadan', shiftKey: '5-2' },
     '0006': { name: 'Farrux', shiftKey: '5-2' },
@@ -75,13 +74,12 @@ const EMPLOYEE_SHIFT_MAP = {
 };
 
 const EMPLOYEE_SECRET_KEYS = {
-    '001': '4yB!isuxrs',
     '003': 'gh#ma9mTsw',
     '004': 'agA8kb&vyk',
     '0006': 'b9afrpiR&y',
     '12': '!rlz2ajKkv',
     '24': 'ms&yaMr2fr',
-    '41': 'Pm@9vKrxe!',
+    '41': 'Pm@9vKrxe!', 
     '19': 'Fp@sjeh8cu',
 };
 
